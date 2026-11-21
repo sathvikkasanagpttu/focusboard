@@ -1,41 +1,63 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { useHashView } from './hooks/useHashView';
 import { sampleTasks } from './data/sampleTasks';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { StatCard } from './components/StatCard';
-import { FocusNotes } from './components/FocusNotes';
-import { SearchBar } from './components/SearchBar';
-import { FilterTabs } from './components/FilterTabs';
-import { TaskList } from './components/TaskList';
 import { TaskForm } from './components/TaskForm';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
-import {
-  CheckSquare,
-  Clock,
-  CheckCircle2,
-  TrendingUp,
-  Plus
-} from 'lucide-react';
+import { DashboardView } from './components/views/DashboardView';
+import { AllTasksView } from './components/views/AllTasksView';
+import { CalendarView } from './components/views/CalendarView';
+import { AnalyticsView } from './components/views/AnalyticsView';
+import { SettingsView } from './components/views/SettingsView';
 
 export function App() {
-  // Primary persistent state synchronized with localStorage
+  // Synchronize view routing with URL hash (#dashboard, #tasks, #calendar, #analytics, #settings)
+  const [activeView, setActiveView] = useHashView('dashboard');
+
+  // Single Source of Truth for tasks across all views
   const [tasks, setTasks] = useLocalStorage('focusboard_tasks', sampleTasks);
 
-  // Search & Filtering states
-  const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [priorityFilter, setPriorityFilter] = useState('All');
+  // User Profile state persisted in localStorage
+  const [profile, setProfile] = useLocalStorage('focusboard_profile', {
+    name: 'Alex Morgan',
+    role: 'Product Lead'
+  });
 
-  // Modal & Drawer visibility states
+  // Theme state persisted in localStorage and synced with data-theme on <html>
+  const [theme, setTheme] = useLocalStorage('focusboard_theme', 'light');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  // Mobile navigation drawer state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const headingRef = useRef(null);
+
+  // Modal states for creating / editing tasks
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [formInitialDueDate, setFormInitialDueDate] = useState('');
 
-  // Derived statistics: always computed from full task list
+  // Confirmation dialog states
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+
+  // Search & Filter state for Dashboard view
+  const [dashSearchText, setDashSearchText] = useState('');
+  const [dashStatusFilter, setDashStatusFilter] = useState('All');
+  const [dashPriorityFilter, setDashPriorityFilter] = useState('All');
+
+  // Computed dashboard statistics
   const stats = useMemo(() => {
     const total = tasks.length;
     const inProgress = tasks.filter((t) => t.status === 'In progress').length;
@@ -50,7 +72,7 @@ export function App() {
     };
   }, [tasks]);
 
-  // Derived counts for the status tabs
+  // Derived counts for dashboard status tabs
   const statusCounts = useMemo(() => {
     return {
       All: tasks.length,
@@ -60,55 +82,68 @@ export function App() {
     };
   }, [tasks]);
 
-  // Derived filtered tasks using AND logic: Search + Status + Priority
-  const visibleTasks = useMemo(() => {
-    const normalizedQuery = searchText.trim().toLowerCase();
+  // Derived visible tasks for dashboard
+  const dashVisibleTasks = useMemo(() => {
+    const q = dashSearchText.trim().toLowerCase();
 
     return tasks.filter((task) => {
-      // 1. Search filter: case-insensitive partial match on title
       const matchesSearch =
-        normalizedQuery === '' ||
-        (task.title && task.title.toLowerCase().includes(normalizedQuery));
-
-      // 2. Status filter
+        !q || (task.title && task.title.toLowerCase().includes(q));
       const matchesStatus =
-        statusFilter === 'All' || task.status === statusFilter;
-
-      // 3. Priority filter
+        dashStatusFilter === 'All' || task.status === dashStatusFilter;
       const matchesPriority =
-        priorityFilter === 'All' || task.priority === priorityFilter;
+        dashPriorityFilter === 'All' || task.priority === dashPriorityFilter;
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
-  }, [tasks, searchText, statusFilter, priorityFilter]);
+  }, [tasks, dashSearchText, dashStatusFilter, dashPriorityFilter]);
 
-  const hasActiveFilters =
-    searchText.trim() !== '' || statusFilter !== 'All' || priorityFilter !== 'All';
+  const hasDashActiveFilters =
+    dashSearchText.trim() !== '' ||
+    dashStatusFilter !== 'All' ||
+    dashPriorityFilter !== 'All';
+
+  const handleDashResetFilters = () => {
+    setDashSearchText('');
+    setDashStatusFilter('All');
+    setDashPriorityFilter('All');
+  };
+
+  // Navigation handler
+  const handleNavigate = (viewId) => {
+    setActiveView(viewId);
+    setIsMobileMenuOpen(false);
+    // Accessibility: shift focus to main content heading
+    setTimeout(() => {
+      headingRef.current?.focus();
+    }, 50);
+  };
 
   // Task CRUD operations
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = (initialDate = '') => {
     setEditingTask(null);
+    setFormInitialDueDate(typeof initialDate === 'string' ? initialDate : '');
     setIsFormOpen(true);
   };
 
   const handleOpenEditModal = (task) => {
     setEditingTask(task);
+    setFormInitialDueDate('');
     setIsFormOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsFormOpen(false);
     setEditingTask(null);
+    setFormInitialDueDate('');
   };
 
   const handleFormSubmit = (taskData) => {
     if (editingTask) {
-      // Edit existing task by ID
       setTasks((prev) =>
         prev.map((t) => (t.id === taskData.id ? taskData : t))
       );
     } else {
-      // Prepend newly created task to top
       setTasks((prev) => [taskData, ...prev]);
     }
   };
@@ -121,6 +156,7 @@ export function App() {
     );
   };
 
+  // Deletion handling
   const handleDeleteRequest = (task) => {
     setDeleteTarget(task);
   };
@@ -131,20 +167,22 @@ export function App() {
     setDeleteTarget(null);
   };
 
-  const handleDeleteCancel = () => {
-    setDeleteTarget(null);
+  // Reset to sample tasks handling
+  const handleResetToSampleConfirm = () => {
+    setTasks(sampleTasks);
+    setIsResetConfirmOpen(false);
   };
 
-  const handleResetFilters = () => {
-    setSearchText('');
-    setStatusFilter('All');
-    setPriorityFilter('All');
+  // Clear all tasks handling
+  const handleClearAllConfirm = () => {
+    setTasks([]);
+    setIsClearConfirmOpen(false);
   };
 
   return (
     <div className="app-layout">
       {/* Accessibility Skip Link */}
-      <a href="#main-content" className="skip-link">
+      <a href="#main-content-heading" className="skip-link">
         Skip to main content
       </a>
 
@@ -152,111 +190,122 @@ export function App() {
       <Sidebar
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
+        activeView={activeView}
+        onNavigate={handleNavigate}
       />
 
       <div className="app-main-wrapper">
         {/* Top Header */}
         <Header
+          activeView={activeView}
           isSidebarOpen={isMobileMenuOpen}
           onToggleSidebar={() => setIsMobileMenuOpen((prev) => !prev)}
-          onOpenTaskForm={handleOpenCreateModal}
+          onOpenTaskForm={() => handleOpenCreateModal()}
+          profile={profile}
+          headingRef={headingRef}
         />
 
-        {/* Main Content Area */}
-        <main id="main-content" className="main-content" tabIndex={-1}>
-          {/* Section 1: Metrics Overview */}
-          <section className="stats-grid" aria-label="Task progress summary">
-            <StatCard
-              title="Total Tasks"
-              value={stats.total}
-              icon={CheckSquare}
-              subtitle="All registered backlog items"
-              variant="total"
-            />
-            <StatCard
-              title="In Progress"
-              value={stats.inProgress}
-              icon={Clock}
-              subtitle="Currently active sprint work"
-              variant="progress"
-            />
-            <StatCard
-              title="Completed"
-              value={stats.completed}
-              icon={CheckCircle2}
-              subtitle="Successfully delivered"
-              variant="completed"
-            />
-            <StatCard
-              title="Completion Rate"
-              value={`${stats.completionRate}%`}
-              icon={TrendingUp}
-              subtitle="Sprint velocity indicator"
-              progressBar={true}
-              progressValue={stats.completionRate}
-              variant="rate"
-            />
-          </section>
-
-          {/* Section 2: Focus Notes Carousel */}
-          <FocusNotes />
-
-          {/* Section 3: Task Management Dashboard Panel */}
-          <section className="task-section" aria-label="Tasks workspace">
-            <div className="task-section__header">
-              <div className="task-section__title-wrap">
-                <h2 className="task-section__title">Work Items</h2>
-                <span className="task-section__count-tag">
-                  {visibleTasks.length} {visibleTasks.length === 1 ? 'task' : 'tasks'}
-                </span>
-              </div>
-
-              <div className="task-section__controls">
-                <SearchBar
-                  value={searchText}
-                  onChange={setSearchText}
-                  onClear={() => setSearchText('')}
-                />
-              </div>
-            </div>
-
-            <FilterTabs
-              statusFilter={statusFilter}
-              onStatusChange={setStatusFilter}
-              priorityFilter={priorityFilter}
-              onPriorityChange={setPriorityFilter}
+        {/* Dynamic Main Views */}
+        <main id="main-content" className="main-content">
+          {activeView === 'dashboard' && (
+            <DashboardView
+              tasks={tasks}
+              stats={stats}
               statusCounts={statusCounts}
-              hasActiveFilters={hasActiveFilters}
-              onResetFilters={handleResetFilters}
+              visibleTasks={dashVisibleTasks}
+              searchText={dashSearchText}
+              onSearchChange={setDashSearchText}
+              onClearSearch={() => setDashSearchText('')}
+              statusFilter={dashStatusFilter}
+              onStatusChange={setDashStatusFilter}
+              priorityFilter={dashPriorityFilter}
+              onPriorityChange={setDashPriorityFilter}
+              hasActiveFilters={hasDashActiveFilters}
+              onResetFilters={handleDashResetFilters}
+              onEditTask={handleOpenEditModal}
+              onDeleteTask={handleDeleteRequest}
+              onTaskStatusChange={handleStatusChange}
+              onCreateTask={() => handleOpenCreateModal()}
             />
+          )}
 
-            <TaskList
-              tasks={visibleTasks}
-              totalTaskCount={tasks.length}
-              onEdit={handleOpenEditModal}
-              onDelete={handleDeleteRequest}
-              onStatusChange={handleStatusChange}
-              onCreateClick={handleOpenCreateModal}
-              onResetFilters={handleResetFilters}
+          {activeView === 'tasks' && (
+            <AllTasksView
+              tasks={tasks}
+              onEditTask={handleOpenEditModal}
+              onDeleteTask={handleDeleteRequest}
+              onTaskStatusChange={handleStatusChange}
+              onCreateTask={() => handleOpenCreateModal()}
             />
-          </section>
+          )}
+
+          {activeView === 'calendar' && (
+            <CalendarView
+              tasks={tasks}
+              onEditTask={handleOpenEditModal}
+              onDeleteTask={handleDeleteRequest}
+              onCreateTaskWithDate={(dateStr) => handleOpenCreateModal(dateStr)}
+            />
+          )}
+
+          {activeView === 'analytics' && (
+            <AnalyticsView
+              tasks={tasks}
+              onCreateTask={() => handleOpenCreateModal()}
+            />
+          )}
+
+          {activeView === 'settings' && (
+            <SettingsView
+              profile={profile}
+              onUpdateProfile={setProfile}
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              tasks={tasks}
+              onOpenResetConfirm={() => setIsResetConfirmOpen(true)}
+              onOpenClearConfirm={() => setIsClearConfirmOpen(true)}
+            />
+          )}
         </main>
       </div>
 
-      {/* Task Creation & Editing Modal */}
+      {/* Task Creation & Editing Modal (Available in all views) */}
       <TaskForm
         isOpen={isFormOpen}
         onClose={handleCloseModal}
         onSubmit={handleFormSubmit}
         initialTask={editingTask}
+        initialDueDate={formInitialDueDate}
       />
 
-      {/* Task Deletion Confirmation Dialog */}
+      {/* Single Task Deletion Confirmation Dialog */}
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
         taskTitle={deleteTarget?.title || ''}
         onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Reset to Sample Tasks Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isResetConfirmOpen}
+        title="Reset Backlog to Sample Tasks?"
+        description="This will overwrite your existing deliverables with the 8 initial sample tasks. Any custom tasks you created will be replaced."
+        confirmText="Reset to Sample"
+        confirmVariant="danger"
+        onConfirm={handleResetToSampleConfirm}
+        onCancel={() => setIsResetConfirmOpen(false)}
+      />
+
+      {/* Clear All Tasks Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isClearConfirmOpen}
+        title="Clear All Tasks in Workspace?"
+        description="Are you sure you want to delete all tasks? This action will leave your workspace backlog completely empty and cannot be undone."
+        confirmText="Clear All Tasks"
+        confirmVariant="danger"
+        onConfirm={handleClearAllConfirm}
+        onCancel={() => setIsClearConfirmOpen(false)}
       />
     </div>
   );

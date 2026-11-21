@@ -11,19 +11,24 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, active: true },
-  { id: 'tasks', label: 'All Tasks', icon: CheckSquare, active: false },
-  { id: 'calendar', label: 'Calendar', icon: CalendarDays, active: false },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3, active: false },
-  { id: 'settings', label: 'Settings', icon: Settings, active: false },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'tasks', label: 'All Tasks', icon: CheckSquare },
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 /**
- * Sidebar navigation component.
+ * Sidebar navigation component supporting view routing.
  * On desktop (1440px), permanently docked.
  * On tablet/mobile (<=1024px), functions as an accessible slide-in drawer with backdrop.
  */
-export function Sidebar({ isOpen, onClose }) {
+export function Sidebar({
+  isOpen,
+  onClose,
+  activeView = 'dashboard',
+  onNavigate
+}) {
   const sidebarRef = useRef(null);
 
   // Close on Escape when mobile drawer is open
@@ -40,6 +45,11 @@ export function Sidebar({ isOpen, onClose }) {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  const handleItemClick = (e, viewId) => {
+    e.preventDefault();
+    onNavigate(viewId);
+  };
 
   return (
     <>
@@ -82,20 +92,15 @@ export function Sidebar({ isOpen, onClose }) {
           <ul className="sidebar__menu">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
+              const isActive = activeView === item.id;
+
               return (
                 <li key={item.id} className="sidebar__menu-item">
                   <a
                     href={`#${item.id}`}
-                    className={`sidebar__link ${item.active ? 'sidebar__link--active' : ''}`}
-                    aria-current={item.active ? 'page' : undefined}
-                    onClick={(e) => {
-                      if (!item.active) {
-                        e.preventDefault();
-                      }
-                      if (isOpen) {
-                        onClose();
-                      }
-                    }}
+                    className={`sidebar__link ${isActive ? 'sidebar__link--active' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={(e) => handleItemClick(e, item.id)}
                   >
                     <Icon size={19} className="sidebar__link-icon" aria-hidden="true" />
                     <span>{item.label}</span>

@@ -14,7 +14,8 @@ export function TaskForm({
   isOpen,
   onClose,
   onSubmit,
-  initialTask = null
+  initialTask = null,
+  initialDueDate = ''
 }) {
   const [formData, setFormData] = useState({
     title: '',
@@ -46,12 +47,15 @@ export function TaskForm({
           dueDate: initialTask.dueDate || ''
         });
       } else {
-        // Default due date to today + 3 days in YYYY-MM-DD
-        const defaultDate = new Date();
-        defaultDate.setDate(defaultDate.getDate() + 3);
-        const yyyy = defaultDate.getFullYear();
-        const mm = String(defaultDate.getMonth() + 1).padStart(2, '0');
-        const dd = String(defaultDate.getDate()).padStart(2, '0');
+        let targetDueDate = initialDueDate;
+        if (!targetDueDate) {
+          const defaultDate = new Date();
+          defaultDate.setDate(defaultDate.getDate() + 3);
+          const yyyy = defaultDate.getFullYear();
+          const mm = String(defaultDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(defaultDate.getDate()).padStart(2, '0');
+          targetDueDate = `${yyyy}-${mm}-${dd}`;
+        }
 
         setFormData({
           title: '',
@@ -59,7 +63,7 @@ export function TaskForm({
           category: 'Development',
           status: 'To do',
           priority: 'Medium',
-          dueDate: `${yyyy}-${mm}-${dd}`
+          dueDate: targetDueDate
         });
       }
       setErrors({});
@@ -70,7 +74,7 @@ export function TaskForm({
         titleInputRef.current?.focus();
       }, 50);
     }
-  }, [isOpen, initialTask]);
+  }, [isOpen, initialTask, initialDueDate]);
 
   // Handle Escape key and focus trap
   useEffect(() => {
