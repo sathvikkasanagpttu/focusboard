@@ -182,7 +182,7 @@ export function App() {
   return (
     <div className="app-layout">
       {/* Accessibility Skip Link */}
-      <a href="#main-content-heading" className="skip-link">
+      <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
@@ -206,7 +206,7 @@ export function App() {
         />
 
         {/* Dynamic Main Views */}
-        <main id="main-content" className="main-content">
+        <main id="main-content" className="main-content" tabIndex={-1}>
           {activeView === 'dashboard' && (
             <DashboardView
               tasks={tasks}

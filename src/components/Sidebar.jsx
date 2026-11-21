@@ -19,9 +19,9 @@ const NAV_ITEMS = [
 ];
 
 /**
- * Sidebar navigation component supporting view routing.
+ * Sidebar navigation component supporting view routing and accessibility.
  * On desktop (1440px), permanently docked.
- * On tablet/mobile (<=1024px), functions as an accessible slide-in drawer with backdrop.
+ * On tablet/mobile (<=1024px), functions as an accessible slide-in modal drawer with backdrop.
  */
 export function Sidebar({
   isOpen,
@@ -30,20 +30,73 @@ export function Sidebar({
   onNavigate
 }) {
   const sidebarRef = useRef(null);
+  const previouslyFocusedElement = useRef(null);
 
-  // Close on Escape when mobile drawer is open
+  // Focus management and focus trapping when mobile drawer is open
   useEffect(() => {
-    if (!isOpen) return;
+    if (isOpen) {
+      previouslyFocusedElement.current = document.activeElement;
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
+      // Bring focus to the close button inside drawer
+      const timer = setTimeout(() => {
+        const closeBtn = sidebarRef.current?.querySelector('.sidebar__close-btn');
+        if (closeBtn && window.getComputedStyle(closeBtn).display !== 'none') {
+          closeBtn.focus();
+        } else {
+          const firstLink = sidebarRef.current?.querySelector('.sidebar__link');
+          firstLink?.focus();
+        }
+      }, 50);
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+          return;
+        }
+
+        // Focus trap inside drawer
+        if (e.key === 'Tab' && sidebarRef.current) {
+          const focusable = Array.from(
+            sidebarRef.current.querySelectorAll(
+              'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter((el) => {
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && !el.disabled;
+          });
+
+          if (focusable.length === 0) return;
+
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener('keydown', handleKeyDown);
+        if (
+          previouslyFocusedElement.current &&
+          typeof previouslyFocusedElement.current.focus === 'function'
+        ) {
+          previouslyFocusedElement.current.focus();
+        }
+      };
+    }
   }, [isOpen, onClose]);
 
   const handleItemClick = (e, viewId) => {
