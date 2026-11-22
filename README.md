@@ -4,8 +4,9 @@ FocusBoard is an enterprise-grade, accessible, and responsive task management ap
 
 ---
 
-## Repository
+## Live Demo & Repository
 
+- **Live Deployment:** [https://focusboard-begonia-00d963.netlify.app](https://focusboard-begonia-00d963.netlify.app)
 - **GitHub Repository:** [https://github.com/sathvikkasanagpttu/focusboard](https://github.com/sathvikkasanagpttu/focusboard)
 
 ---
